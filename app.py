@@ -1,3 +1,5 @@
+import eventlet
+eventlet.monkey_patch()
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, send_from_directory
 from flask_socketio import SocketIO, emit
 from flask_sqlalchemy import SQLAlchemy
@@ -94,6 +96,5 @@ def handle_sos(data):
     return {'status': 'error'}
 
 if __name__ == '__main__':
-    import eventlet
-    eventlet.monkey_patch()
+   
     socketio.run(app, host="0.0.0.0", port=5000)
