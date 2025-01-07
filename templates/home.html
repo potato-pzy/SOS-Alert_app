@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home - SOS Alert</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        .debug-info {
+            margin-top: 1rem;
+            font-family: monospace;
+            font-size: 0.9rem;
+            color: #6b7280;
+            background-color: #f3f4f6;
+            padding: 1rem;
+            border-radius: 0.5rem;
+        }
+        .notification {
+            background-color: #fee2e2;
+            border-left: 4px solid #dc2626;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 0.5rem;
+            animation: slideIn 0.3s ease;
+        }
+        @keyframes slideIn {
+            from {
+                transform: translateY(-20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="home-box">
+            <h2>Welcome, {{ username }}!</h2>
+            <div class="sos-section">
+                <button id="sosButton" class="sos-btn" disabled>SOS</button>
+                <div id="locationStatus" class="location-status"></div>
+                <div id="debugInfo" class="debug-info"></div>
+            </div>
+            <div id="notifications" class="notifications"></div>
+            <audio id="alertSound" src="{{ url_for('static', filename='audio/alert.wav') }}" preload="auto"></audio>
+            <a href="{{ url_for('logout') }}" class="btn logout-btn">Logout</a>
+        </div>
+    </div>
+    <script>
+        const socket = io();
+        const debugInfo = document.getElementById('debugInfo');
+        const locationStatus = document.getElementById('locationStatus');
+        const sosButton = document.getElementById('sosButton');
+        const alertSound = document.getElementById('alertSound');
+        
+        function updateDebugInfo(message) {
+            const timestamp = new Date().toISOString();
+            debugInfo.innerHTML += `<div>[${timestamp}] ${message}</div>`;
+            console.log(`[${timestamp}] ${message}`);
+        }
+        
+        function updateLocationStatus(message, status) {
+            locationStatus.textContent = message;
+            locationStatus.className = `location-status ${status}`;
+            sosButton.disabled = (status === 'error');
+        }
+        
+        function getLocation() {
+            updateDebugInfo('Requesting location...');
+            if (!navigator.geolocation) {
+                updateLocationStatus('Geolocation not supported', 'error');
+                return;
+            }
+            
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const userLocation = {
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude
+                    };
+                    updateDebugInfo(`Location obtained: ${JSON.stringify(userLocation)}`);
+                    updateLocationStatus('Location services ready', 'success');
+                    sosButton.disabled = false;
+                },
+                (error) => {
+                    let errorMessage;
+                    switch (error.code) {
+                        case error.PERMISSION_DENIED:
+                            errorMessage = 'Location permission denied';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            errorMessage = 'Location unavailable';
+                            break;
+                        case error.TIMEOUT:
+                            errorMessage = 'Location request timed out';
+                            break;
+                        default:
+                            errorMessage = 'Unknown location error';
+                    }
+                    updateDebugInfo(`Location error: ${errorMessage}`);
+                    updateLocationStatus(errorMessage, 'error');
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+        }
+        
+        // Initialize socket event listeners
+        socket.on('connect', () => {
+            updateDebugInfo('Connected to server');
+        });
+        
+        socket.on('disconnect', () => {
+            updateDebugInfo('Disconnected from server');
+        });
+        
+        socket.on('sos_notification', (data) => {
+            updateDebugInfo(`SOS received from ${data.username}`);
+            const notifications = document.getElementById('notifications');
+            const notification = document.createElement('div');
+            notification.className = 'notification';
+            notification.textContent = `SOS Alert from ${data.username}!`;
+            notifications.appendChild(notification);
+            
+            if (data.play_alert) {
+                alertSound.play().catch(error => {
+                    console.error('Error playing sound:', error);
+                    updateDebugInfo(`Error playing alert sound: ${error.message}`);
+                });
+            }
+        });
+        
+        // Add SOS button click handler
+        sosButton.addEventListener('click', () => {
+            updateDebugInfo('SOS button clicked');
+            socket.emit('sos_alert', {}, (response) => {
+                if (response && response.status === 'success') {
+                    updateDebugInfo('SOS alert sent successfully');
+                } else {
+                    updateDebugInfo('Error sending SOS alert');
+                }
+            });
+        });
+        
+        // Request location immediately and periodically refresh it every 30 seconds
+        getLocation();
+         
+    </script>
+</body>
+</html>
