@@ -94,4 +94,6 @@ def handle_sos(data):
     return {'status': 'error'}
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True)
+    import eventlet
+    eventlet.monkey_patch()
+    socketio.run(app, host="0.0.0.0", port=5000)
